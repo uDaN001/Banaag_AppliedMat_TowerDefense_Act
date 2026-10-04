@@ -824,6 +824,7 @@ MonoBehaviour:
   coinUITarget: {fileID: 419924185}
   coinText: {fileID: 302831811}
   coinPrefab: {fileID: 4910943800337393715, guid: 9bbd5f02e28bcf745b103fbea893570b, type: 3}
+  punchAmt: 1.1
 --- !u!4 &1199419192
 Transform:
   m_ObjectHideFlags: 0

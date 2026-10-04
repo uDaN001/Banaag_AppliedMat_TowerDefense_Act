@@ -1,7 +1,6 @@
 using UnityEngine;
-using UnityEngine.UI;
-using System.Collections;
 using TMPro;
+using System.Collections;
 
 public class CoinManager : MonoBehaviour
 {
@@ -15,13 +14,19 @@ public class CoinManager : MonoBehaviour
     private int currentCoins = 0;
     private int targetCoins = 0;
 
+    [SerializeField] float punchAmt = 1.1f;
+
+    // Store reference to UI animation coroutine only
+    private Coroutine punchAnimationCoroutine;
+
     void Awake() => Instance = this;
-    void Start() => Enemy.OnEnemyDied += SpawnCoin;
-    void OnDestroy() => Enemy.OnEnemyDied -= SpawnCoin;
+
+    void OnEnable() => Enemy.OnEnemyDied += SpawnCoin;
+    void OnDisable() => Enemy.OnEnemyDied -= SpawnCoin;
 
     void SpawnCoin(Enemy enemy)
     {
-        // Spawns a coin at the enemy's world position
+        if (enemy == null) return;
         GameObject coin = Instantiate(coinPrefab, enemy.transform.position, Quaternion.identity);
         StartCoroutine(MoveCoinToUI(coin.transform));
     }
@@ -29,8 +34,8 @@ public class CoinManager : MonoBehaviour
     IEnumerator MoveCoinToUI(Transform coinTrans)
     {
         Vector3 startPos = coinTrans.position;
-        float duration = 1f;
-        float time = 0;
+        float duration = 0.8f;
+        float time = 0f;
 
         while (time < duration)
         {
@@ -39,10 +44,16 @@ public class CoinManager : MonoBehaviour
             time += Time.deltaTime;
             float t = time / duration;
 
-            // Convert UI target rect to world position for the coin to fly toward
-            Vector3 targetWorldPos = Camera.main.ScreenToWorldPoint(new Vector3(coinUITarget.position.x, coinUITarget.position.y, Camera.main.nearClipPlane + 5f));
+            // Calculate target position in 2D space matching the coin's Z depth
+            Vector3 targetScreenPos = coinUITarget.position;
+            targetScreenPos.z = Mathf.Abs(Camera.main.transform.position.z - startPos.z);
+            Vector3 targetWorldPos = Camera.main.ScreenToWorldPoint(targetScreenPos);
 
-            coinTrans.position = Vector3.Lerp(startPos, targetWorldPos, t);
+            // Add slight upward arc curve for better visual feel
+            Vector3 currentLerp = Vector3.Lerp(startPos, targetWorldPos, t);
+            float arc = Mathf.Sin(t * Mathf.PI) * 1.5f;
+            coinTrans.position = currentLerp + new Vector3(0, arc, 0);
+
             yield return null;
         }
 
@@ -53,18 +64,23 @@ public class CoinManager : MonoBehaviour
     public void AddCoins(int amount)
     {
         targetCoins += amount;
-        StopAllCoroutines();
-        StartCoroutine(PunchAndCountRoutine());
+
+        // Stop ONLY the UI animation routine, allowing coin flight routines to continue
+        if (punchAnimationCoroutine != null)
+        {
+            StopCoroutine(punchAnimationCoroutine);
+        }
+        punchAnimationCoroutine = StartCoroutine(PunchAndCountRoutine());
     }
 
     IEnumerator PunchAndCountRoutine()
     {
-        // 1. UI Punch Scale
         Vector3 originalScale = Vector3.one;
-        Vector3 punchScale = originalScale * 0.9f;
-        float punchDuration = 0.15f;
+        Vector3 punchScale = originalScale * punchAmt; // Pop outwards
+        float punchDuration = 0.1f;
 
-        float t = 0;
+        // 1. Expand Punch
+        float t = 0f;
         while (t < punchDuration)
         {
             t += Time.deltaTime;
@@ -72,15 +88,15 @@ public class CoinManager : MonoBehaviour
             yield return null;
         }
 
-        // 2. Ease Value and Scale Down
-        float duration = 0.5f;
-        t = 0;
+        // 2. Count up numbers while returning scale to normal
+        float duration = 0.4f;
+        t = 0f;
         int startCoins = currentCoins;
 
         while (t < duration)
         {
             t += Time.deltaTime;
-            float easeOut = 1 - Mathf.Pow(1 - (t / duration), 3);
+            float easeOut = 1f - Mathf.Pow(1f - (t / duration), 3);
 
             currentCoins = Mathf.RoundToInt(Mathf.Lerp(startCoins, targetCoins, easeOut));
             coinText.text = currentCoins.ToString();
@@ -92,5 +108,6 @@ public class CoinManager : MonoBehaviour
         currentCoins = targetCoins;
         coinText.text = currentCoins.ToString();
         coinUITarget.localScale = originalScale;
+        punchAnimationCoroutine = null;
     }
 }
